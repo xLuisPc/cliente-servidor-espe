@@ -1,0 +1,14 @@
+# Clases compiladas
+*.class
+
+# Archivos recibidos por el chat (se guardan en el directorio de trabajo)
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.zip
+*.mp4
+*.mp3
+*.docx
+*.xlsx
