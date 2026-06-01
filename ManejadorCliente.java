@@ -47,8 +47,6 @@ public class ManejadorCliente implements Runnable {
         try {
             // DataInputStream/DataOutputStream: writeUTF escribe un prefijo de 2 bytes
             // con la longitud, y readUTF los usa para leer exactamente ese bloque.
-            // Sin BufferedReader: evita que bytes del archivo queden en un buffer interno
-            // y se confundan con texto.
             entrada = new DataInputStream(socket.getInputStream());
             salida  = new DataOutputStream(socket.getOutputStream());
 
@@ -97,7 +95,7 @@ public class ManejadorCliente implements Runnable {
 
             case Protocolo.MSG:
                 System.out.println("[MSG  ] " + usuario + ": " + partes[2]);
-                // Guardar en historial ANTES del broadcast.
+                // Guardar en historia
                 // Así, si alguien se une justo ahora, encontrará este mensaje en el historial.
                 historial.agregarMensaje(linea);
                 broadcast(linea, false); // reenviar a todos excepto el emisor

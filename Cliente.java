@@ -5,14 +5,12 @@
  *
  * FLUJO DE LA APLICACIÓN:
  *   1. Al iniciar: pedir nombre de usuario (JOptionPane).
- *   2. Mostrar panel de descubrimiento: busca servidores en la red local.
- *   3. Usuario selecciona servidor (o escribe IP manualmente) → conectar.
- *   4. Al conectar: el servidor envía el historial (mensajes y archivos previos).
- *   5. Chat normal. Botón "Cambiar servidor" → volver al paso 2.
+ *   2. Mostrar panel de conexión: ingresar IP y puerto del servidor manualmente.
+ *   3. Al conectar: el servidor envía el historial (mensajes y archivos previos).
+ *   4. Chat normal. Botón "Cambiar servidor" → volver al paso 2.
  *
  * HILOS:
  *   - EDT (Event Dispatch Thread): todo lo de Swing. Nunca bloquear aquí.
- *   - Hilo descubrimiento: envía UDP broadcast y espera respuestas (2 seg).
  *   - Hilo escucha: bloquea en readUTF() esperando mensajes del servidor.
  *     Se lanza uno nuevo por cada conexión; el anterior muere al cerrar el socket.
  * ─────────────────────────────────────────────────────────────────────────────
@@ -23,10 +21,9 @@ import javax.swing.text.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
 import java.nio.file.*;
-import java.util.*;
-import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Cliente extends JFrame {
@@ -50,13 +47,10 @@ public class Cliente extends JFrame {
     private CardLayout cardLayout;
     private JPanel     panelRaiz;
 
-    // Panel de descubrimiento
-    private DefaultListModel<ServidorInfo> modeloServidores;
-    private JList<ServidorInfo>            listaServidores;
-    private JButton                        btnBuscar;
-    private JLabel                         lblEstado;
-    private JTextField                     campoIP;
-    private JTextField                     campoPuerto;
+    // Panel de conexión
+    private JLabel     lblEstado;
+    private JTextField campoIP;
+    private JTextField campoPuerto;
 
     // Panel de chat
     private JTextPane  areaChat;
@@ -82,9 +76,6 @@ public class Cliente extends JFrame {
         construirInterfaz();
         setLocationRelativeTo(null);
         setVisible(true);
-
-        // Al iniciar, buscar servidores automáticamente.
-        buscarServidores();
     }
 
     // ─── Construcción de la interfaz ─────────────────────────────────────────
@@ -102,65 +93,48 @@ public class Cliente extends JFrame {
         cardLayout.show(panelRaiz, "DESCUBRIMIENTO");
     }
 
-    // ── Panel de descubrimiento ──────────────────────────────────────────────
+    // ── Panel de conexión ────────────────────────────────────────────────────
 
     private JPanel construirPanelDescubrimiento() {
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 30, 20, 30));
 
-        // ── Título ──
-        JLabel titulo = new JLabel("Servidores disponibles en la red local");
-        titulo.setFont(new Font("SansSerif", Font.BOLD, 14));
-        panel.add(titulo, BorderLayout.NORTH);
-
-        // ── Lista de servidores encontrados ──
-        modeloServidores = new DefaultListModel<>();
-        listaServidores  = new JList<>(modeloServidores);
-        listaServidores.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        listaServidores.setFont(new Font("Monospaced", Font.PLAIN, 13));
-        // Doble clic en un servidor → conectar directamente
-        listaServidores.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) intentarConexion();
-            }
-        });
-        panel.add(new JScrollPane(listaServidores), BorderLayout.CENTER);
-
-        // ── Panel inferior: conexión manual + botones ──
-        JPanel panelInferior = new JPanel(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(4, 4, 4, 4);
+        c.insets = new Insets(6, 6, 6, 6);
         c.fill   = GridBagConstraints.HORIZONTAL;
 
-        // Fila 1: IP manual y puerto
-        c.gridx = 0; c.gridy = 0; c.weightx = 0;
-        panelInferior.add(new JLabel("IP manual:"), c);
+        // Título
+        JLabel titulo = new JLabel("Conectar al servidor de chat");
+        titulo.setFont(new Font("SansSerif", Font.BOLD, 15));
+        c.gridx = 0; c.gridy = 0; c.gridwidth = 4; c.weightx = 1;
+        panel.add(titulo, c);
+
+        // Fila: IP y puerto
+        c.gridwidth = 1;
+        c.gridx = 0; c.gridy = 1; c.weightx = 0;
+        panel.add(new JLabel("IP del servidor:"), c);
         c.gridx = 1; c.weightx = 1;
         campoIP = new JTextField("localhost");
-        panelInferior.add(campoIP, c);
+        panel.add(campoIP, c);
         c.gridx = 2; c.weightx = 0;
-        panelInferior.add(new JLabel("Puerto:"), c);
+        panel.add(new JLabel("Puerto:"), c);
         c.gridx = 3; c.weightx = 0.3;
         campoPuerto = new JTextField(String.valueOf(Protocolo.PUERTO), 6);
-        panelInferior.add(campoPuerto, c);
+        panel.add(campoPuerto, c);
 
-        // Fila 2: botones y estado
-        c.gridx = 0; c.gridy = 1; c.weightx = 0;
-        btnBuscar = new JButton("Buscar");
-        panelInferior.add(btnBuscar, c);
-        c.gridx = 1; c.weightx = 1;
-        lblEstado = new JLabel("Presione Buscar para encontrar servidores.");
+        // Fila: estado + botón conectar
+        c.gridx = 0; c.gridy = 2; c.gridwidth = 3; c.weightx = 1;
+        lblEstado = new JLabel(" ");
         lblEstado.setForeground(Color.GRAY);
-        panelInferior.add(lblEstado, c);
-        c.gridx = 2; c.gridwidth = 2; c.weightx = 0;
+        panel.add(lblEstado, c);
+        c.gridx = 3; c.gridwidth = 1; c.weightx = 0;
         JButton btnConectar = new JButton("Conectar →");
         btnConectar.setFont(new Font("SansSerif", Font.BOLD, 12));
-        panelInferior.add(btnConectar, c);
+        panel.add(btnConectar, c);
 
-        panel.add(panelInferior, BorderLayout.SOUTH);
-
-        btnBuscar.addActionListener(e -> buscarServidores());
         btnConectar.addActionListener(e -> intentarConexion());
+        campoIP.addActionListener(e -> intentarConexion());
+        campoPuerto.addActionListener(e -> intentarConexion());
 
         return panel;
     }
@@ -209,133 +183,21 @@ public class Cliente extends JFrame {
         return panel;
     }
 
-    // ─── Descubrimiento UDP ──────────────────────────────────────────────────
-
-    /**
-     * Busca servidores en la red local enviando un broadcast UDP.
-     * Corre en un hilo separado para no bloquear el EDT durante los 2 segundos
-     * de espera de respuestas.
-     */
-    private void buscarServidores() {
-        btnBuscar.setEnabled(false);
-        btnBuscar.setText("Buscando…");
-        modeloServidores.clear();
-        lblEstado.setText("Buscando servidores en la red local…");
-
-        new Thread(() -> {
-            List<ServidorInfo> encontrados = descubrirEnRed();
-
-            // Volver al EDT para actualizar la interfaz.
-            SwingUtilities.invokeLater(() -> {
-                for (ServidorInfo s : encontrados) {
-                    modeloServidores.addElement(s);
-                }
-                lblEstado.setText(encontrados.isEmpty()
-                        ? "No se encontraron servidores. Puede conectarse por IP."
-                        : encontrados.size() + " servidor(es) encontrado(s).");
-                btnBuscar.setEnabled(true);
-                btnBuscar.setText("Buscar");
-            });
-        }).start();
-    }
-
-    /**
-     * Envía DISCOVER como broadcast UDP y recoge las respuestas SINFO durante 2 segundos.
-     * Se ejecuta en un hilo de fondo (no en el EDT).
-     */
-    private List<ServidorInfo> descubrirEnRed() {
-        List<ServidorInfo> encontrados = new ArrayList<>();
-
-        try (DatagramSocket udpSocket = new DatagramSocket()) {
-            udpSocket.setBroadcast(true);
-            udpSocket.setSoTimeout(2000); // espera máxima de respuestas: 2 segundos
-
-            byte[] datos = Protocolo.DESCUBRIR.getBytes("UTF-8");
-
-            // Enviar a 255.255.255.255 (broadcast general)
-            enviarBroadcast(udpSocket, datos, InetAddress.getByName("255.255.255.255"));
-
-            // También enviar al broadcast de cada interfaz de red activa.
-            // Esto mejora la compatibilidad en macOS/Linux donde 255.255.255.255
-            // a veces no llega a todas las interfaces.
-            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            if (interfaces != null) {
-                while (interfaces.hasMoreElements()) {
-                    NetworkInterface ni = interfaces.nextElement();
-                    if (ni.isLoopback() || !ni.isUp()) continue;
-                    for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
-                        InetAddress broadcast = ia.getBroadcast();
-                        if (broadcast != null) enviarBroadcast(udpSocket, datos, broadcast);
-                    }
-                }
-            }
-
-            // Recoger todas las respuestas hasta que expire el timeout.
-            byte[] buf = new byte[256];
-            while (true) {
-                try {
-                    DatagramPacket respuesta = new DatagramPacket(buf, buf.length);
-                    udpSocket.receive(respuesta); // lanza SocketTimeoutException a los 2 seg
-                    String contenido = new String(
-                            respuesta.getData(), 0, respuesta.getLength(), "UTF-8");
-                    String[] partes = Protocolo.parsear(contenido);
-
-                    if (Protocolo.INFO_SERVIDOR.equals(partes[0]) && partes.length >= 3) {
-                        String ip     = respuesta.getAddress().getHostAddress();
-                        String nombre = partes[1];
-                        int    puerto = Integer.parseInt(partes[2]);
-
-                        // Evitar duplicados (puede llegar la misma respuesta por varias interfaces)
-                        boolean existe = encontrados.stream()
-                                .anyMatch(s -> s.ip.equals(ip) && s.puerto == puerto);
-                        if (!existe) {
-                            encontrados.add(new ServidorInfo(nombre, ip, puerto));
-                        }
-                    }
-                } catch (SocketTimeoutException e) {
-                    break; // Se acabó el tiempo, no hay más respuestas
-                }
-            }
-
-        } catch (IOException e) {
-            // No crítico: si falla el UDP, el usuario puede conectarse manualmente.
-        }
-
-        return encontrados;
-    }
-
-    private void enviarBroadcast(DatagramSocket socket, byte[] datos, InetAddress destino) {
-        try {
-            DatagramPacket pkt = new DatagramPacket(
-                    datos, datos.length, destino, Protocolo.PUERTO_UDP);
-            socket.send(pkt);
-        } catch (IOException e) { /* ignorar interfaces sin acceso */ }
-    }
-
     // ─── Conexión TCP ────────────────────────────────────────────────────────
 
-    /** Conecta al servidor seleccionado en la lista o al escrito manualmente. */
+    /** Conecta al servidor con la IP y puerto ingresados manualmente. */
     private void intentarConexion() {
-        ServidorInfo servidor = listaServidores.getSelectedValue();
-        String ip;
-        int    puerto;
-
-        if (servidor != null) {
-            ip     = servidor.ip;
-            puerto = servidor.puerto;
-        } else {
-            // Conexión manual por IP
-            ip = campoIP.getText().trim();
-            try {
-                puerto = Integer.parseInt(campoPuerto.getText().trim());
-            } catch (NumberFormatException e) {
-                lblEstado.setText("Puerto inválido.");
-                return;
-            }
-        }
-
+        String ip = campoIP.getText().trim();
         if (ip.isEmpty()) {
             lblEstado.setText("Ingrese una IP.");
+            return;
+        }
+
+        int puerto;
+        try {
+            puerto = Integer.parseInt(campoPuerto.getText().trim());
+        } catch (NumberFormatException e) {
+            lblEstado.setText("Puerto inválido.");
             return;
         }
 
@@ -574,10 +436,10 @@ public class Cliente extends JFrame {
         archivosEnMemoria.clear();
         limpiarChat();
 
-        // Volver al panel de descubrimiento y buscar servidores automáticamente.
+        // Volver al panel de conexión.
         cardLayout.show(panelRaiz, "DESCUBRIMIENTO");
         cambiandoServidor = false;
-        buscarServidores();
+        lblEstado.setText(" ");
     }
 
     // ─── Utilidades de UI ────────────────────────────────────────────────────
@@ -622,25 +484,6 @@ public class Cliente extends JFrame {
             }
         } catch (IOException e) { /* ignorar */ }
         System.exit(0);
-    }
-
-    // ─── Clase interna: información de un servidor descubierto ───────────────
-
-    static class ServidorInfo {
-        final String nombre;
-        final String ip;
-        final int    puerto;
-
-        ServidorInfo(String nombre, String ip, int puerto) {
-            this.nombre = nombre;
-            this.ip     = ip;
-            this.puerto = puerto;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%-30s  %s:%d", nombre, ip, puerto);
-        }
     }
 
     // ─── Punto de entrada ────────────────────────────────────────────────────

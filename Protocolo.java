@@ -10,20 +10,12 @@
  *   FILE|<usuario>|<nombreArchivo>|<tamanioEnBytes>   ← luego vienen los bytes crudos
  *   HIST_INI                                          ← señal: empieza el historial
  *   HIST_FIN                                          ← señal: terminó el historial
- *
- * PROTOCOLO UDP (descubrimiento en red local):
- *   Cliente envía:    DISCOVER
- *   Servidor responde: SINFO|<nombre>|<puertoTCP>
  * ─────────────────────────────────────────────────────────────────────────────
  */
 public class Protocolo {
 
     // Puerto TCP donde el servidor acepta conexiones de chat.
     public static final int PUERTO = 5050;
-
-    // Puerto UDP para descubrimiento en la red local.
-    // El servidor escucha aquí; el cliente envía un broadcast a este puerto.
-    public static final int PUERTO_UDP = 5051;
 
     // ── Tipos de mensaje TCP ────────────────────────────────────────────────
     public static final String JOIN     = "JOIN";
@@ -34,12 +26,6 @@ public class Protocolo {
     public static final String HIST_INI = "HIST_INI";
     /** Marca el fin del historial; a partir de aquí todo es mensajes en vivo. */
     public static final String HIST_FIN = "HIST_FIN";
-
-    // ── Tipos de mensaje UDP ────────────────────────────────────────────────
-    /** El cliente envía esto (broadcast) para preguntar qué servidores hay. */
-    public static final String DESCUBRIR    = "DISCOVER";
-    /** El servidor responde con esto a cada solicitud de descubrimiento. */
-    public static final String INFO_SERVIDOR = "SINFO";
 
     // ── Constructores de líneas TCP ─────────────────────────────────────────
 
@@ -61,16 +47,6 @@ public class Protocolo {
      */
     public static String construirFile(String usuario, String nombre, long tamanio) {
         return FILE + "|" + usuario + "|" + nombre + "|" + tamanio;
-    }
-
-    // ── Constructores de mensajes UDP ───────────────────────────────────────
-
-    /**
-     * Respuesta del servidor a un DISCOVER.
-     * Ej: "SINFO|MiServidor|5050"
-     */
-    public static String construirInfoServidor(String nombre, int puertoTCP) {
-        return INFO_SERVIDOR + "|" + nombre + "|" + puertoTCP;
     }
 
     // ── Parseo ──────────────────────────────────────────────────────────────
