@@ -1,10 +1,9 @@
-# Clases compiladas
-*.class
+# Maven
+target/
 
 # IntelliJ IDEA
 .idea/
 *.iml
-out/
 
 # Archivos recibidos por el chat (se guardan en el directorio de trabajo)
 *.pdf

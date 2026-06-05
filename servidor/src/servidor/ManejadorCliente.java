@@ -1,3 +1,5 @@
+package servidor;
+
 /**
  * ManejadorCliente.java
  * ─────────────────────────────────────────────────────────────────────────────
@@ -6,12 +8,13 @@
  *
  * Ciclo de vida:
  *   1. run() inicia los streams y espera el primer mensaje (JOIN).
- *   2. JOIN: envía historial, agrega cliente a la lista de broadcast.
+ *   2. JOIN: agrega cliente a la lista de broadcast.
  *   3. Bucle: leer → parsear → actuar (MSG, FILE, LEAVE).
  *   4. Al desconectarse (excepción en readUTF), limpia y notifica.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import protocolo.Protocolo;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -23,7 +26,6 @@ public class ManejadorCliente implements Runnable {
 
     private final Socket socket;
     private final List<ManejadorCliente> clientes;
-    private final Historial historial;
 
     private DataInputStream  entrada;
     private DataOutputStream salida;
@@ -32,12 +34,9 @@ public class ManejadorCliente implements Runnable {
     // Flag para evitar que desconectar() se ejecute más de una vez.
     private volatile boolean desconectado = false;
 
-    public ManejadorCliente(Socket socket,
-                            List<ManejadorCliente> clientes,
-                            Historial historial) {
+    public ManejadorCliente(Socket socket, List<ManejadorCliente> clientes) {
         this.socket   = socket;
         this.clientes = clientes;
-        this.historial = historial;
     }
 
     // ─── Hilo principal ─────────────────────────────────────────────────────
@@ -77,15 +76,6 @@ public class ManejadorCliente implements Runnable {
                 System.out.println("[JOIN ] " + usuario
                         + " desde " + socket.getInetAddress().getHostAddress());
 
-                // Enviar historial ANTES de añadir a la lista.
-                // Así el cliente nuevo ve los mensajes anteriores sin interrupciones.
-                // Nota: si llega un broadcast mientras enviamos el historial, espera
-                // en la cola de enviarMensaje (sincronizado) y llega justo después. ✓
-                enviarMensaje(Protocolo.HIST_INI); // señal: empieza historial
-                historial.enviarHistorialA(this);  // reproduce todos los mensajes/archivos
-                enviarMensaje(Protocolo.HIST_FIN); // señal: termina historial
-
-                // Ahora sí agregamos a la lista: desde aquí recibirá los mensajes en vivo.
                 clientes.add(this);
 
                 // Notificar a los demás que alguien nuevo llegó.
@@ -95,10 +85,7 @@ public class ManejadorCliente implements Runnable {
 
             case Protocolo.MSG:
                 System.out.println("[MSG  ] " + usuario + ": " + partes[2]);
-                // Guardar en historia
-                // Así, si alguien se une justo ahora, encontrará este mensaje en el historial.
-                historial.agregarMensaje(linea);
-                broadcast(linea, false); // reenviar a todos excepto el emisor
+                broadcast(linea, false);
                 break;
 
             case Protocolo.FILE:
@@ -119,8 +106,6 @@ public class ManejadorCliente implements Runnable {
                     totalLeidos += leidos;
                 }
 
-                // Guardar en historial para que futuros clientes puedan descargarlo.
-                historial.agregarArchivo(linea, datos);
                 broadcastArchivo(linea, datos);
                 break;
 

@@ -1,16 +1,16 @@
+package servidor;
+
 /**
  * Servidor.java
  * ─────────────────────────────────────────────────────────────────────────────
- * COMPILAR :  javac *.java
- * EJECUTAR :  java Servidor [nombre]     ← nombre es opcional
- *             java Cliente              ← una terminal por cada cliente
- *
- * Ejemplos:
- *   java Servidor                       → nombre automático (hostname)
- *   java Servidor "Sala de estudio"     → nombre personalizado
+ * COMPILAR Y EMPAQUETAR (desde la raíz del proyecto):
+ *   mvn package
+ * EJECUTAR:
+ *   java -jar servidor/target/servidor-1.0.jar [nombre]
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import protocolo.Protocolo;
 import java.io.IOException;
 import java.net.*;
 import java.util.*;
@@ -28,10 +28,6 @@ public class Servidor {
         } catch (UnknownHostException e) {
             nombre = "Servidor";
         }
-
-        // Historial compartido entre todos los manejadores.
-        // Cuando un cliente se une, recibe los mensajes anteriores desde aquí.
-        Historial historial = new Historial();
 
         // Lista sincronizada de clientes activos para hacer broadcast.
         List<ManejadorCliente> clientes =
@@ -53,7 +49,7 @@ public class Servidor {
 
                 // Cada cliente recibe su propio hilo para no bloquear la aceptación.
                 ManejadorCliente manejador =
-                        new ManejadorCliente(socket, clientes, historial);
+                        new ManejadorCliente(socket, clientes);
                 new Thread(manejador).start();
             }
 

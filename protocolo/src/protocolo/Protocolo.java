@@ -1,3 +1,5 @@
+package protocolo;
+
 /**
  * Protocolo.java
  * ─────────────────────────────────────────────────────────────────────────────
@@ -8,8 +10,6 @@
  *   LEAVE|<usuario>
  *   MSG|<usuario>|<texto>
  *   FILE|<usuario>|<nombreArchivo>|<tamanioEnBytes>   ← luego vienen los bytes crudos
- *   HIST_INI                                          ← señal: empieza el historial
- *   HIST_FIN                                          ← señal: terminó el historial
  * ─────────────────────────────────────────────────────────────────────────────
  */
 public class Protocolo {
@@ -22,10 +22,6 @@ public class Protocolo {
     public static final String LEAVE    = "LEAVE";
     public static final String MSG      = "MSG";
     public static final String FILE     = "FILE";
-    /** Marca el inicio del historial enviado al cliente recién conectado. */
-    public static final String HIST_INI = "HIST_INI";
-    /** Marca el fin del historial; a partir de aquí todo es mensajes en vivo. */
-    public static final String HIST_FIN = "HIST_FIN";
 
     // ── Constructores de líneas TCP ─────────────────────────────────────────
 

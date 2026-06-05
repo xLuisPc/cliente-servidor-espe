@@ -1,3 +1,5 @@
+package cliente;
+
 /**
  * Cliente.java
  * ─────────────────────────────────────────────────────────────────────────────
@@ -6,8 +8,7 @@
  * FLUJO DE LA APLICACIÓN:
  *   1. Al iniciar: pedir nombre de usuario (JOptionPane).
  *   2. Mostrar panel de conexión: ingresar IP y puerto del servidor manualmente.
- *   3. Al conectar: el servidor envía el historial (mensajes y archivos previos).
- *   4. Chat normal. Botón "Cambiar servidor" → volver al paso 2.
+ *   3. Chat normal. Botón "Cambiar servidor" → volver al paso 2.
  *
  * HILOS:
  *   - EDT (Event Dispatch Thread): todo lo de Swing. Nunca bloquear aquí.
@@ -16,6 +17,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import protocolo.Protocolo;
 import javax.swing.*;
 import javax.swing.text.*;
 import java.awt.*;
@@ -256,25 +258,10 @@ public class Cliente extends JFrame {
 
                 switch (tipo) {
                     case Protocolo.FILE:
-                        // Leer los bytes del archivo en este hilo para no bloquear el EDT.
                         recibirArchivo(linea);
-                        break;
-                    case Protocolo.HIST_INI:
-                        // El servidor va a enviarnos el historial: mostrar separador.
-                        SwingUtilities.invokeLater(() ->
-                            agregarTextoEstilizado("── Historial del chat ──\n",
-                                    Color.GRAY, Font.ITALIC));
-                        break;
-                    case Protocolo.HIST_FIN:
-                        // Historial terminado; lo que sigue son mensajes en vivo.
-                        SwingUtilities.invokeLater(() ->
-                            agregarTextoEstilizado("── Mensajes en vivo ──\n",
-                                    Color.GRAY, Font.ITALIC));
                         break;
                     default:
                         final String lineaFinal = linea;
-                        // Toda actualización de Swing desde un hilo externo DEBE ir
-                        // por invokeLater para no tocar componentes fuera del EDT.
                         SwingUtilities.invokeLater(() -> mostrarMensaje(lineaFinal));
                 }
             }
@@ -314,8 +301,6 @@ public class Cliente extends JFrame {
                 totalLeidos += leidos;
             }
 
-            // Guardar en memoria (disponible aunque el usuario cambie de servidor y vuelva
-            // a conectarse, ya que el servidor reenvía el historial de archivos).
             archivosEnMemoria.put(nombreArchivo, datos);
 
             final String kb = String.format("%,.1f KB", tamanio / 1024.0);
@@ -350,7 +335,7 @@ public class Cliente extends JFrame {
         byte[] datos = archivosEnMemoria.get(nombreOriginal);
         if (datos == null) {
             JOptionPane.showMessageDialog(this,
-                    "El archivo ya no está en memoria.\nReconéctate al servidor para volver a descargarlo.",
+                    "El archivo ya no está en memoria.",
                     "No disponible", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -449,19 +434,6 @@ public class Cliente extends JFrame {
         try {
             StyledDocument doc = areaChat.getStyledDocument();
             doc.insertString(doc.getLength(), texto, null);
-            areaChat.setCaretPosition(doc.getLength());
-        } catch (BadLocationException e) { /* no puede ocurrir */ }
-    }
-
-    /** Agrega texto con color y estilo (para separadores de historial). */
-    private void agregarTextoEstilizado(String texto, Color color, int estilo) {
-        try {
-            SimpleAttributeSet attrs = new SimpleAttributeSet();
-            StyleConstants.setForeground(attrs, color);
-            StyleConstants.setItalic(attrs, (estilo & Font.ITALIC) != 0);
-            StyleConstants.setBold(attrs,   (estilo & Font.BOLD)   != 0);
-            StyledDocument doc = areaChat.getStyledDocument();
-            doc.insertString(doc.getLength(), texto, attrs);
             areaChat.setCaretPosition(doc.getLength());
         } catch (BadLocationException e) { /* no puede ocurrir */ }
     }
